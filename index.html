@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>REPUBLICKA · BookBinder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,10 +19,7 @@
     padding: 40px 20px;
   }
 
-  header {
-    text-align: center;
-    margin-bottom: 36px;
-  }
+  header { text-align: center; margin-bottom: 36px; }
 
   h1 {
     font-size: 2rem;
@@ -146,13 +144,14 @@
     padding: 6px 10px;
   }
 
-  .option-row input[type="text"]:focus {
+  .option-row input[type="text"]:focus,
+  .option-row input[type="number"]:focus {
     outline: none;
     border-color: #f0c97a;
   }
 
   .option-row input[type="number"] {
-    width: 60px;
+    width: 70px;
     background: #161616;
     border: 1px solid #2a2a2a;
     border-radius: 4px;
@@ -162,405 +161,23 @@
     padding: 6px 10px;
   }
 
-  .btn-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  button {
-    padding: 12px 28px;
-    border: none;
-    border-radius: 4px;
-    font-family: Georgia, serif;
-    font-size: 0.9rem;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    transition: opacity 0.2s;
-  }
-
-  button:hover { opacity: 0.85; }
-  button:disabled { opacity: 0.35; cursor: not-allowed; }
-
-  #bindBtn {
-    background: #f0c97a;
-    color: #0a0a0a;
-    font-weight: bold;
-  }
-
-  #clearBtn {
-    background: #1e1e1e;
-    color: #a0856a;
-    border: 1px solid #2a2a2a;
-  }
-
-  .status {
-    font-size: 0.82rem;
-    color: #a0856a;
-    letter-spacing: 0.08em;
-    min-height: 1.2em;
-    text-align: right;
-  }
-
-  .status.success { color: #7acc8f; }
-  .status.error   { color: #cc7a7a; }
-
-  footer {
-    margin-top: 60px;
-    text-align: center;
-    color: #2a2a2a;
-    font-size: 0.75rem;
-    letter-spacing: 0.12em;
-  }
-
-  footer a { color: inherit; text-decoration: none; }
-  footer a:hover { color: #f0c97a; }
-</style>
-</head>
-<body>
-
-<header>
-  <h1>༺ BookBinder ༻</h1>
-  <p class="sub">CC0 PUBLICKÁ DOMÁNIA · REPUBLICKA · ALL LOVE RESERVED</p>
-</header>
-
-<div class="container">
-
-  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-    <div class="drop-zone-icon">📚</div>
-    <div class="drop-zone-title">Drop your .txt books here</div>
-    <div class="drop-zone-sub">or click to select files · any order · any number</div>
-    <input type="file" id="fileInput" accept=".txt" multiple>
-  </div>
-
-  <div class="file-list-wrap" id="fileListWrap">
-    <div class="file-list-header">
-      <span id="fileCount">0 books loaded</span>
-      <span id="totalSize"></span>
-    </div>
-    <div id="fileList"></div>
-  </div>
-
-  <div class="options">
-    <div class="option-row">
-      <label>Divider between books</label>
-      <input type="text" id="divider" value="════════════════════════════════════════════════════════════">
-    </div>
-    <div class="option-row">
-      <label>Blank lines between books</label>
-      <input type="number" id="spacing" value="4" min="1" max="20">
-    </div>
-    <div class="option-row">
-      <label>Output filename</label>
-      <input type="text" id="filename" value="complete-archive.txt">
-    </div>
-  </div>
-
-  <div class="btn-row">
-    <button id="bindBtn" onclick="bind()" disabled>✦ Bind All Books</button>
-    <button id="clearBtn" onclick="clearAll()">Clear</button>
-  </div>
-
-  <div class="status" id="status"></div>
-
-</div>
-
-<footer>
-  AMORIARIACKA · <a href="https://kkk.education" target="_blank">kkk.education</a>
-</footer>
-
-<script>
-  let files = [];
-
-  const dropZone = document.getElementById('dropZone');
-  const fileInput = document.getElementById('fileInput');
-
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    dropZone.classList.add('over');
-  });
-
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('over');
-    addFiles(Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.txt')));
-  });
-
-  fileInput.addEventListener('change', () => {
-    addFiles(Array.from(fileInput.files));
-    fileInput.value = '';
-  });
-
-  function addFiles(newFiles) {
-    newFiles.forEach(f => {
-      if (!files.find(x => x.name === f.name)) files.push(f);
-    });
-    files.sort((a, b) => a.name.localeCompare(b.name));
-    renderFileList();
-  }
-
-  function renderFileList() {
-    const list = document.getElementById('fileList');
-    const wrap = document.getElementById('fileListWrap');
-    const count = document.getElementById('fileCount');
-    const totalSizeEl = document.getElementById('totalSize');
-
-    if (files.length === 0) {
-      wrap.style.display = 'none';
-      document.getElementById('bindBtn').disabled = true;
-      return;
-    }
-
-    wrap.style.display = 'block';
-    document.getElementById('bindBtn').disabled = false;
-
-    const totalBytes = files.reduce((s, f) => s + f.size, 0);
-    count.textContent = files.length + ' book' + (files.length !== 1 ? 's' : '') + ' loaded';
-    totalSizeEl.textContent = formatSize(totalBytes) + ' total';
-
-    list.innerHTML = '';
-    files.forEach(f => {
-      const row = document.createElement('div');
-      row.className = 'file-item';
-      row.innerHTML = `<span class="icon">📄</span><span>${f.name}</span><span class="size">${formatSize(f.size)}</span>`;
-      list.appendChild(row);
-    });
-  }
-
-  function formatSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  }
-
-  async function bind() {
-    if (files.length === 0) return;
-
-    const divider  = document.getElementById('divider').value;
-    const spacing  = parseInt(document.getElementById('spacing').value) || 4;
-    const filename = document.getElementById('filename').value || 'complete-archive.txt';
-    const gap      = '\n'.repeat(spacing);
-    const btn      = document.getElementById('bindBtn');
-
-    btn.disabled = true;
-    setStatus('Binding ' + files.length + ' books...', '');
-
-    try {
-      const parts = [];
-
-      for (let i = 0; i < files.length; i++) {
-        setStatus('Reading ' + (i + 1) + ' of ' + files.length + ' — ' + files[i].name, '');
-        const text = await readFile(files[i]);
-        parts.push(text.trim());
-      }
-
-      const separator = gap + divider + gap;
-      const combined  = parts.join(separator);
-      const final     = combined + '\n';
-
-      const blob = new Blob([final], { type: 'text/plain;charset=utf-8' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = filename.endsWith('.txt') ? filename : filename + '.txt';
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setStatus('✦ Bound ' + files.length + ' books · ' + formatSize(final.length) + ' · saved as ' + a.download, 'success');
-    } catch(e) {
-      setStatus('Error: ' + e.message, 'error');
-    }
-
-    btn.disabled = false;
-  }
-
-  function readFile(file) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload  = () => resolve(r.result);
-      r.onerror = () => reject(new Error('Could not read ' + file.name));
-      r.readAsText(file, 'utf-8');
-    });
-  }
-
-  function clearAll() {
-    files = [];
-    renderFileList();
-    setStatus('Cleared.', '');
-  }
-
-  function setStatus(msg, type) {
-    const el = document.getElementById('status');
-    el.textContent = msg;
-    el.className = 'status' + (type ? ' ' + type : '');
-  }
-</script>
-
-</body>
-</html><!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>REPUBLICKA · BookBinder</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: #0a0a0a;
-    color: #f0e6d3;
-    font-family: Georgia, serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 40px 20px;
-  }
-
-  header {
-    text-align: center;
-    margin-bottom: 36px;
-  }
-
-  h1 {
-    font-size: 2rem;
-    font-weight: normal;
-    letter-spacing: 0.12em;
-    color: #f0c97a;
-  }
-
-  header p.sub {
-    color: #a0856a;
-    font-size: 0.85rem;
-    letter-spacing: 0.15em;
-    margin-top: 6px;
-  }
-
-  .container {
-    width: 100%;
-    max-width: 780px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .drop-zone {
-    border: 2px dashed #3a3a3a;
-    border-radius: 10px;
-    padding: 50px 30px;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
-    background: #0f0f0f;
-  }
-
-  .drop-zone:hover, .drop-zone.over {
-    border-color: #f0c97a;
-    background: #141408;
-  }
-
-  .drop-zone-icon { font-size: 2.5rem; margin-bottom: 14px; }
-
-  .drop-zone-title {
-    font-size: 1.1rem;
-    color: #f0c97a;
-    letter-spacing: 0.08em;
-    margin-bottom: 6px;
-  }
-
-  .drop-zone-sub {
-    font-size: 0.82rem;
-    color: #6a5a4a;
-    letter-spacing: 0.06em;
-  }
-
-  input[type="file"] { display: none; }
-
-  .file-list-wrap {
-    background: #0f0f0f;
-    border: 1px solid #1e1e1e;
-    border-radius: 8px;
-    max-height: 260px;
-    overflow-y: auto;
-    display: none;
-  }
-
-  .file-list-header {
-    padding: 10px 16px;
+  .option-row .hint {
     font-size: 0.78rem;
+    color: #4a3a2a;
+    margin-left: 4px;
+  }
+
+  .divider-section {
+    border-top: 1px solid #1a1a1a;
+    padding-top: 14px;
+  }
+
+  .divider-section .section-label {
+    font-size: 0.75rem;
     letter-spacing: 0.12em;
-    color: #a0856a;
+    color: #5a4a3a;
     text-transform: uppercase;
-    border-bottom: 1px solid #1e1e1e;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    position: sticky;
-    top: 0;
-    background: #0f0f0f;
-  }
-
-  .file-item {
-    padding: 8px 16px;
-    font-size: 0.88rem;
-    color: #c0a880;
-    border-bottom: 1px solid #161616;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .file-item:last-child { border-bottom: none; }
-  .file-item span.icon { color: #f0c97a; font-size: 0.9rem; }
-  .file-item span.size { color: #5a4a3a; font-size: 0.78rem; margin-left: auto; }
-
-  .options {
-    background: #0f0f0f;
-    border: 1px solid #1e1e1e;
-    border-radius: 8px;
-    padding: 18px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .option-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 0.9rem;
-    color: #c0a880;
-  }
-
-  .option-row label { flex: 1; }
-
-  .option-row input[type="text"] {
-    flex: 2;
-    background: #161616;
-    border: 1px solid #2a2a2a;
-    border-radius: 4px;
-    color: #f0e6d3;
-    font-family: Georgia, serif;
-    font-size: 0.88rem;
-    padding: 6px 10px;
-  }
-
-  .option-row input[type="text"]:focus {
-    outline: none;
-    border-color: #f0c97a;
-  }
-
-  .option-row input[type="number"] {
-    width: 60px;
-    background: #161616;
-    border: 1px solid #2a2a2a;
-    border-radius: 4px;
-    color: #f0e6d3;
-    font-family: Georgia, serif;
-    font-size: 0.88rem;
-    padding: 6px 10px;
+    margin-bottom: 10px;
   }
 
   .btn-row {
@@ -589,6 +206,13 @@
     font-weight: bold;
   }
 
+  #splitBtn {
+    background: #1e1e1e;
+    color: #7acc8f;
+    border: 1px solid #7acc8f44;
+    font-weight: bold;
+  }
+
   #clearBtn {
     background: #1e1e1e;
     color: #a0856a;
@@ -598,9 +222,8 @@
   .status {
     font-size: 0.82rem;
     color: #a0856a;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     min-height: 1.2em;
-    text-align: right;
   }
 
   .status.success { color: #7acc8f; }
@@ -655,10 +278,20 @@
       <label>Output filename</label>
       <input type="text" id="filename" value="complete-archive.txt">
     </div>
+
+    <div class="divider-section">
+      <div class="section-label">✦ Split into Chunks</div>
+      <div class="option-row">
+        <label>Books per chunk</label>
+        <input type="number" id="chunkSize" value="10" min="1" max="999">
+        <span class="hint">downloads as a .zip</span>
+      </div>
+    </div>
   </div>
 
   <div class="btn-row">
     <button id="bindBtn" onclick="bind()" disabled>✦ Bind All Books</button>
+    <button id="splitBtn" onclick="split()" disabled>✦ Split into Chunks</button>
     <button id="clearBtn" onclick="clearAll()">Clear</button>
   </div>
 
@@ -676,13 +309,8 @@
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput');
 
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    dropZone.classList.add('over');
-  });
-
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
     dropZone.classList.remove('over');
@@ -695,31 +323,27 @@
   });
 
   function addFiles(newFiles) {
-    newFiles.forEach(f => {
-      if (!files.find(x => x.name === f.name)) files.push(f);
-    });
+    newFiles.forEach(f => { if (!files.find(x => x.name === f.name)) files.push(f); });
     files.sort((a, b) => a.name.localeCompare(b.name));
     renderFileList();
   }
 
   function renderFileList() {
-    const list = document.getElementById('fileList');
-    const wrap = document.getElementById('fileListWrap');
+    const list  = document.getElementById('fileList');
+    const wrap  = document.getElementById('fileListWrap');
     const count = document.getElementById('fileCount');
-    const totalSizeEl = document.getElementById('totalSize');
+    const sizeEl = document.getElementById('totalSize');
+    const hasFiles = files.length > 0;
 
-    if (files.length === 0) {
-      wrap.style.display = 'none';
-      document.getElementById('bindBtn').disabled = true;
-      return;
-    }
+    wrap.style.display = hasFiles ? 'block' : 'none';
+    document.getElementById('bindBtn').disabled  = !hasFiles;
+    document.getElementById('splitBtn').disabled = !hasFiles;
 
-    wrap.style.display = 'block';
-    document.getElementById('bindBtn').disabled = false;
+    if (!hasFiles) return;
 
     const totalBytes = files.reduce((s, f) => s + f.size, 0);
     count.textContent = files.length + ' book' + (files.length !== 1 ? 's' : '') + ' loaded';
-    totalSizeEl.textContent = formatSize(totalBytes) + ' total';
+    sizeEl.textContent = formatSize(totalBytes) + ' total';
 
     list.innerHTML = '';
     files.forEach(f => {
@@ -736,45 +360,67 @@
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   }
 
+  async function readAllFiles() {
+    const divider = document.getElementById('divider').value;
+    const spacing = parseInt(document.getElementById('spacing').value) || 4;
+    const gap     = '\n'.repeat(spacing);
+    const sep     = gap + divider + gap;
+    const texts   = [];
+
+    for (let i = 0; i < files.length; i++) {
+      setStatus('Reading ' + (i + 1) + ' of ' + files.length + ' — ' + files[i].name, '');
+      texts.push(await readFile(files[i]));
+    }
+    return { texts, sep };
+  }
+
   async function bind() {
-    if (files.length === 0) return;
+    if (!files.length) return;
+    setBtns(true);
+    try {
+      const { texts, sep } = await readAllFiles();
+      const combined = texts.map(t => t.trim()).join(sep) + '\n';
+      const filename = document.getElementById('filename').value || 'complete-archive.txt';
+      download(combined, filename.endsWith('.txt') ? filename : filename + '.txt');
+      setStatus('✦ Bound ' + files.length + ' books · ' + formatSize(combined.length) + ' · saved as ' + filename, 'success');
+    } catch(e) { setStatus('Error: ' + e.message, 'error'); }
+    setBtns(false);
+  }
 
-    const divider  = document.getElementById('divider').value;
-    const spacing  = parseInt(document.getElementById('spacing').value) || 4;
-    const filename = document.getElementById('filename').value || 'complete-archive.txt';
-    const gap      = '\n'.repeat(spacing);
-    const btn      = document.getElementById('bindBtn');
-
-    btn.disabled = true;
-    setStatus('Binding ' + files.length + ' books...', '');
+  async function split() {
+    if (!files.length) return;
+    const chunkSize = parseInt(document.getElementById('chunkSize').value) || 10;
+    setBtns(true);
 
     try {
-      const parts = [];
+      const { texts, sep } = await readAllFiles();
+      const zip    = new JSZip();
+      const chunks = [];
 
-      for (let i = 0; i < files.length; i++) {
-        setStatus('Reading ' + (i + 1) + ' of ' + files.length + ' — ' + files[i].name, '');
-        const text = await readFile(files[i]);
-        parts.push(text.trim());
+      for (let i = 0; i < texts.length; i += chunkSize) {
+        chunks.push(texts.slice(i, i + chunkSize));
       }
 
-      const separator = gap + divider + gap;
-      const combined  = parts.join(separator);
-      const final     = combined + '\n';
+      const pad = String(chunks.length).length;
+      chunks.forEach((chunk, idx) => {
+        const num      = String(idx + 1).padStart(pad, '0');
+        const fname    = 'archive-part-' + num + '.txt';
+        const content  = chunk.map(t => t.trim()).join(sep) + '\n';
+        zip.file(fname, content);
+      });
 
-      const blob = new Blob([final], { type: 'text/plain;charset=utf-8' });
+      setStatus('Packaging ' + chunks.length + ' chunks into zip...', '');
+      const blob = await zip.generateAsync({ type: 'blob' });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
-      a.download = filename.endsWith('.txt') ? filename : filename + '.txt';
+      a.download = 'archive-chunks.zip';
       a.click();
       URL.revokeObjectURL(url);
 
-      setStatus('✦ Bound ' + files.length + ' books · ' + formatSize(final.length) + ' · saved as ' + a.download, 'success');
-    } catch(e) {
-      setStatus('Error: ' + e.message, 'error');
-    }
-
-    btn.disabled = false;
+      setStatus('✦ Split into ' + chunks.length + ' chunks of ' + chunkSize + ' books · saved as archive-chunks.zip', 'success');
+    } catch(e) { setStatus('Error: ' + e.message, 'error'); }
+    setBtns(false);
   }
 
   function readFile(file) {
@@ -784,6 +430,20 @@
       r.onerror = () => reject(new Error('Could not read ' + file.name));
       r.readAsText(file, 'utf-8');
     });
+  }
+
+  function download(text, filename) {
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' })),
+      download: filename
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function setBtns(disabled) {
+    document.getElementById('bindBtn').disabled  = disabled;
+    document.getElementById('splitBtn').disabled = disabled;
   }
 
   function clearAll() {
