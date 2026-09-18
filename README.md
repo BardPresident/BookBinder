@@ -2,6 +2,7 @@
 📚✨ BookBinder · CC0 Public Domain 🌍  Drop your .txt books in, get one beautiful combined file out. 📄➡️📖 Customisable dividers and spacing between books. Runs entirely in your browser — no installation, no internet required. Perfect for loading your entire archive into NotebookLM. 🔮 AMORIARIACKA ❤️
 
 https://github.com/BardPresident
+https://republicka.life
 https://kkk.education
 https://archive.org/details/@bardpresident
 https://www.youtube.com/@BardPresident
