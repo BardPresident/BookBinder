@@ -145,7 +145,8 @@
   }
 
   .option-row input[type="text"]:focus,
-  .option-row input[type="number"]:focus {
+  .option-row input[type="number"]:focus,
+  .option-row select:focus {
     outline: none;
     border-color: #f0c97a;
   }
@@ -160,6 +161,26 @@
     font-size: 0.88rem;
     padding: 6px 10px;
   }
+
+  .option-row select {
+    flex: 2;
+    background: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    color: #f0e6d3;
+    font-family: Georgia, serif;
+    font-size: 0.88rem;
+    padding: 6px 10px;
+  }
+
+  .option-row input[type="checkbox"] {
+    accent-color: #f0c97a;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+
+  .option-row label.check { cursor: pointer; }
 
   .option-row .hint {
     font-size: 0.78rem;
@@ -274,7 +295,37 @@
       <label>Blank lines between books</label>
       <input type="number" id="spacing" value="4" min="1" max="20">
     </div>
-    <div class="option-row">
+
+    <div class="divider-section">
+      <div class="section-label">✦ File Name Headings</div>
+      <div class="option-row">
+        <input type="checkbox" id="useHeadings" checked>
+        <label class="check" for="useHeadings">Use each file name as a heading after the divider</label>
+      </div>
+      <div class="option-row" style="margin-top:10px;">
+        <label>Heading style</label>
+        <select id="headStyle">
+          <option value="plain">Plain — Book Title</option>
+          <option value="upper">UPPERCASE — BOOK TITLE</option>
+          <option value="markdown"># Markdown — # Book Title</option>
+          <option value="framed">Framed — ✦ Book Title ✦</option>
+        </select>
+      </div>
+      <div class="option-row" style="margin-top:10px;">
+        <input type="checkbox" id="stripExt" checked>
+        <label class="check" for="stripExt">Hide the .txt extension</label>
+      </div>
+      <div class="option-row" style="margin-top:10px;">
+        <input type="checkbox" id="firstHeading" checked>
+        <label class="check" for="firstHeading">Also put a heading on the very first book</label>
+      </div>
+      <div class="option-row" style="margin-top:10px;">
+        <input type="checkbox" id="underline">
+        <label class="check" for="underline">Add a second divider line under the heading</label>
+      </div>
+    </div>
+
+    <div class="option-row divider-section">
       <label>Output filename</label>
       <input type="text" id="filename" value="complete-archive.txt">
     </div>
@@ -314,7 +365,7 @@
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
     dropZone.classList.remove('over');
-    addFiles(Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.txt')));
+    addFiles(Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.txt')));
   });
 
   fileInput.addEventListener('change', () => {
@@ -324,7 +375,7 @@
 
   function addFiles(newFiles) {
     newFiles.forEach(f => { if (!files.find(x => x.name === f.name)) files.push(f); });
-    files.sort((a, b) => a.name.localeCompare(b.name));
+    files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     renderFileList();
   }
 
@@ -349,7 +400,13 @@
     files.forEach(f => {
       const row = document.createElement('div');
       row.className = 'file-item';
-      row.innerHTML = `<span class="icon">📄</span><span>${f.name}</span><span class="size">${formatSize(f.size)}</span>`;
+      const icon = document.createElement('span');
+      icon.className = 'icon'; icon.textContent = '📄';
+      const name = document.createElement('span');
+      name.textContent = f.name;
+      const size = document.createElement('span');
+      size.className = 'size'; size.textContent = formatSize(f.size);
+      row.append(icon, name, size);
       list.appendChild(row);
     });
   }
@@ -358,6 +415,35 @@
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  // Build the heading text for a file, according to the chosen style
+  function makeHeading(filename) {
+    let title = filename;
+    if (document.getElementById('stripExt').checked) {
+      title = title.replace(/\.txt$/i, '');
+    }
+    switch (document.getElementById('headStyle').value) {
+      case 'upper':    return title.toUpperCase();
+      case 'markdown': return '# ' + title;
+      case 'framed':   return '✦ ' + title + ' ✦';
+      default:         return title;
+    }
+  }
+
+  // One book = optional heading (+ optional underline bar) + its text
+  function buildBlock(text, filename, isFirst) {
+    const body = text.trim();
+    const useHeadings = document.getElementById('useHeadings').checked;
+    const firstOk = document.getElementById('firstHeading').checked;
+
+    if (!useHeadings || (isFirst && !firstOk)) return body;
+
+    const divider = document.getElementById('divider').value;
+    const underline = document.getElementById('underline').checked && divider;
+    let head = makeHeading(filename);
+    if (underline) head += '\n' + divider;
+    return head + '\n\n' + body;
   }
 
   async function readAllFiles() {
@@ -379,7 +465,7 @@
     setBtns(true);
     try {
       const { texts, sep } = await readAllFiles();
-      const combined = texts.map(t => t.trim()).join(sep) + '\n';
+      const combined = texts.map((t, i) => buildBlock(t, files[i].name, i === 0)).join(sep) + '\n';
       const filename = document.getElementById('filename').value || 'complete-archive.txt';
       download(combined, filename.endsWith('.txt') ? filename : filename + '.txt');
       setStatus('✦ Bound ' + files.length + ' books · ' + formatSize(combined.length) + ' · saved as ' + filename, 'success');
@@ -398,14 +484,17 @@
       const chunks = [];
 
       for (let i = 0; i < texts.length; i += chunkSize) {
-        chunks.push(texts.slice(i, i + chunkSize));
+        chunks.push({ start: i, texts: texts.slice(i, i + chunkSize) });
       }
 
       const pad = String(chunks.length).length;
       chunks.forEach((chunk, idx) => {
         const num      = String(idx + 1).padStart(pad, '0');
         const fname    = 'archive-part-' + num + '.txt';
-        const content  = chunk.map(t => t.trim()).join(sep) + '\n';
+        // The first book in every chunk is treated as a "first" book (no divider before it)
+        const content  = chunk.texts
+          .map((t, j) => buildBlock(t, files[chunk.start + j].name, j === 0))
+          .join(sep) + '\n';
         zip.file(fname, content);
       });
 
